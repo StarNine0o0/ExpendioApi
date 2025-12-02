@@ -11,160 +11,178 @@ use Illuminate\Validation\Rule;
 
 class InventarioController extends Controller
 {
-    /**
-     * GET /api/productos
-     * Muestra la lista de productos con su marca, categoría y stock.
-     */
-    public function index()
+
+   
+    public function index(Request $request)
     {
         // Cargamos las relaciones para que el JSON venga completo
         $productos = Producto::with(['marca', 'categoria', 'productoAlmacen.sucursal'])
-                             ->orderBy('nombre', 'asc')
-                             ->paginate(15); // Paginación de 15 en 15
+                             ->orderBy('nombre', 'asc');
+                             
+
+        //filtro de busqueda por nombre o codigo de barra
+        if ($request->has('search') && $request->search != '') {
+        $search = $request->search;
+        $productos->where(function ($query) use ($search) {
+            $query->where('nombre', 'like', "%{$search}%")
+                  ->orWhere('codigo_barra', 'like', "%{$search}%");
+        });
+    }
+
+    //filtro por categoria
+    if ($request->has('categoria_id') && $request->categoria_id != '') {
+        $productos->where('id_categoria', $request->categoria_id);
+    }
+    //filtro por estado
+    if ($request->has('stock_status') && $request->stock_status != '') {
+        $status = $request->stock_status;
+        
+        $productos->whereHas('productoAlmacen', function ($query) use ($status) {
+            if ($status === 'agotado') {
+                $query->where('stock_actual', '<=', DB::raw('productos.stock_minimo'));
+            } elseif ($status === 'disponible') {
+                $query->where('stock_actual', '>', DB::raw('productos.stock_minimo'));
+            }
+            // NOTA: Esta lógica requiere que la tabla PRODUCTO_ALMACEN tenga el stock mínimo.
+          
+        });
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'data' => $productos->paginate(20)
+    ]);
+}
+
+public function store(Request $request){ // Crear nuevo producto con stock inicial en una sucursal
+
+    $validatedData = $request->validate([
+        'nombre'        =>  'required|string|max:255',
+        'codigo_barra'  => 'nullable|string|max:100',
+        'costo_inventario' => 'required|numeric|min:0',
+        'precio_unitario' => 'required|numeric|min:0|gte:costo_inventario',
+        'presentacion' => ['required', \Illuminate\Validation\Rule::in(['355ml', '473ml', '1l'])],
+        'tipo_envase'  => ['required', \Illuminate\Validation\Rule::in(['lata', 'botella', 'barril'])],
+        'id_categoria' => 'required|integer|exists:categorias,id_categoria',
+        'id_marca' => 'required|integer|exists:marcas,id_marca',
+        'descripcion' => 'nullable|string|max:200',
+
+
+        'stock_minimo' => 'nullable|integer|min:0',
+        'stock_maximo' => 'nullable|integer|min:0',
+
+        //datosd el stok inicial
+        'stock_inicial' => 'required|integer|min:0',
+        'id_sucursal' => 'required|integer|exists:sucursales,id_sucursal',
+
+       
+    ]);
+
+    DB::beginTransaction();
+
+    try {
+        // Crear el registro del producto
+        $producto = \App\Models\Producto::create([
+            'nombre' => $validatedData['nombre'],
+            'codigo_barra' => $validatedData['codigo_barra'] ?? null,
+            'costo_inventario' => $validatedData['costo_inventario'],
+            'precio_unitario' => $validatedData['precio_unitario'],
+            'presentacion' => $validatedData['presentacion'],
+            'tipo_envase' => $validatedData['tipo_envase'],
+            'id_categoria' => $validatedData['id_categoria'],
+            'id_marca' => $validatedData['id_marca'],
+            'descripcion' => $validatedData['descripcion'] ?? null,
+
+            'stock_actual' => $validatedData['stock_inicial'],
+            "stock_minimo" => data_get($validatedData, 'stock_minimo', 10), // Valor por defecto si no se proporciona
+            'stock_maximo' => data_get($validatedData, 'stock_maximo', 100), // Valor por defecto si no se proporciona
+            'fecha_ingreso' => now(),
+            'estado' => 'activo',
+        ]);
+
+        // Crear el registro en producto_almacen para el stock inicial
+        \App\Models\ProductoAlmacen::create([
+            'id_producto' => $producto->id_producto,
+            'id_sucursal' => $validatedData['id_sucursal'],
+            'stock_actual' => $validatedData['stock_inicial'],
+            'estado' => 'disponible',
+        ]);
+
+
+        DB::commit();// Confirmar la transacción
 
         return response()->json([
             'status' => 'success',
-            'data' => $productos
-        ]);
-    }
+            'message' => 'Producto registrado correctamente',
+            'data' => $producto->load(['marca', 'categoria', 'productoAlmacen'])
+        ], 201);
 
-    /**
-     * POST /api/productos
-     * Crea un producto nuevo y su stock inicial.
-     */
-    public function store(Request $request)
-    {
-        // 1. Validar los datos que entran
-        $validated = $request->validate([
-            // Datos de la tabla PRODUCTO
-            'nombre'           => 'required|string|max:50|unique:producto,nombre',
-            'codigo_barra'     => 'nullable|string|max:50',
-            'costo_inventario' => 'required|numeric|min:0',
-            'precio_unitario'  => 'required|numeric|min:0',
-            'presentacion'     => ['required', Rule::in(['355ml', '473ml', '1l'])],
-            'tipo_envase'      => ['required', Rule::in(['lata', 'botella', 'barril'])],
-            'id_categoria'     => 'required|integer|exists:categorias,id_categoria',
-            'id_marca'         => 'required|integer|exists:marcas,id_marca',
-            'descripcion'      => 'nullable|string|max:200',
-            
-            // Datos extra para la tabla PRODUCTO_ALMACEN (Stock Inicial)
-            'stock_inicial'    => 'required|integer|min:0',
-            'id_sucursal'      => 'required|integer|exists:sucursales,id_sucursal',
-            'ubicacion'        => 'nullable|string|max:50',
-        ]);
-
-        // 2. Iniciar Transacción (Todo o Nada)
-        DB::beginTransaction();
-
-        try {
-            // A. Crear el Producto
-            $producto = Producto::create([
-                'nombre'           => $validated['nombre'],
-                'codigo_barra'     => $validated['codigo_barra'],
-                'costo_inventario' => $validated['costo_inventario'],
-                'precio_unitario'  => $validated['precio_unitario'],
-                'presentacion'     => $validated['presentacion'],
-                'tipo_envase'      => $validated['tipo_envase'],
-                'id_categoria'     => $validated['id_categoria'],
-                'id_marca'         => $validated['id_marca'],
-                'descripcion'      => $validated['descripcion'] ?? null,
-                'fecha_ingreso'    => now(),
-                'stock'            => $validated['stock_inicial'], // Stock global
-                'estado'           => 'activo',
-            ]);
-
-            // B. Asignar el Stock en la Sucursal (Tabla PRODUCTO_ALMACEN)
-            ProductoAlmacen::create([
-                'id_producto'  => $producto->id_producto, // Usamos el ID recién creado
-                'id_sucursal'  => $validated['id_sucursal'],
-                'stock_actual' => $validated['stock_inicial'],
-                'ubicacion'    => $validated['ubicacion'] ?? 'Bodega',
-                'estado'       => 'disponible',
-            ]);
-
-            // Si todo salió bien, guardamos los cambios
-            DB::commit();
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Producto creado correctamente',
-                'data' => $producto->load('productoAlmacen')
-            ], 201);
-
-        } catch (\Exception $e) {
-            // Si algo falla, deshacemos todo
-            DB::rollBack();
-            
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Error al guardar el producto: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * GET /api/productos/{id}
-     * Muestra un producto específico.
-     */
-    public function show($id)
-    {
-        $producto = Producto::with(['marca', 'categoria', 'productoAlmacen'])->find($id);
-
-        if (!$producto) {
-            return response()->json(['message' => 'Producto no encontrado'], 404);
-        }
-
-        return response()->json(['status' => 'success', 'data' => $producto]);
-    }
-
-    /**
-     * PUT /api/productos/{id}
-     * Actualiza un producto.
-     */
-    public function update(Request $request, $id)
-    {
-        $producto = Producto::find($id);
-
-        if (!$producto) {
-            return response()->json(['message' => 'Producto no encontrado'], 404);
-        }
-
-        $validated = $request->validate([
-            'nombre'           => ['sometimes', 'string', 'max:50', Rule::unique('producto', 'nombre')->ignore($id, 'id_producto')],
-            'precio_unitario'  => 'sometimes|numeric|min:0',
-            // Agrega aquí los demás campos que quieras permitir editar...
-        ]);
-
-        $producto->update($validated);
-
+    } catch (\Exception $e) {
+        DB::rollBack();// Revertir la transacción en caso de error
         return response()->json([
-            'status' => 'success',
-            'message' => 'Producto actualizado',
-            'data' => $producto
-        ]);
-    }
-
-    /**
-     * DELETE /api/productos/{id}
-     * Elimina un producto.
-     */
-    public function destroy($id)
-    {
-        $producto = Producto::find($id);
-
-        if (!$producto) {
-            return response()->json(['message' => 'Producto no encontrado'], 404);
-        }
-
-        // Opcional: Validar si tiene stock antes de borrar
-        // Opcional: Borrar primero los registros de PRODUCTO_ALMACEN
-        // ProductoAlmacen::where('id_producto', $id)->delete();
-
-        $producto->delete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Producto eliminado'
-        ]);
+            'status' => 'error',
+            'message' => 'Error al crear el producto',
+            'error' => $e->getMessage()
+        ], 500);
     }
 }
+
+public function update(Request $request, $id_producto)
+{  // Lógica para actualizar un producto existente
+    $producto = \App\Models\Producto::find($id_producto);
+
+    if (!$producto) {// Verificamos si el producto existe si no retornamos error
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Producto no encontrado'
+        ], 404);
+    }
+    
+    $costo_base = $request->input('costo_inventario', $producto->costo_inventario);// Costo actual o el nuevo si se proporciona
+    $validatedData = $request->validate([
+        'nombre'        =>  ['sometimes', 'string', 'max:50', \Illuminate\Validation\Rule::unique('producto', 'nombre')->ignore($id_producto, 'id_producto')],
+        'codigo_barra'  => 'nullable|string|max:100',
+        'costo_inventario' => 'sometimes|numeric|min:0',
+        'precio_unitario' => ['sometimes', 'numeric', 'min:0', 'gte:'.$costo_base], //
+        'descripcion' => 'nullable|string|max:200',
+        'estado' => ['sometimes', \Illuminate\Validation\Rule::in(['activo', 'desactivado'])],
+
+        'id_categoria' => 'sometimes|integer|exists:categorias,id_categoria',
+        'id_marca' => 'sometimes|integer|exists:marcas,id_marca',
+
+    ]);
+
+    $producto->update($validatedData);
+
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Producto actualizado correctamente',
+        'data' => $producto->load(['marca', 'categoria'])
+    ],200);
+}
+    public function destroy($id_producto)
+    {
+        $producto = \App\Models\Producto::find($id_producto);
+
+        if (!$producto) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Producto no encontrado'
+            ], 404);
+        }
+
+        // Aquí podrías implementar una eliminación lógica si prefieres no borrar registros físicamente
+        $producto->update(['estado' => 'desactivado']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Producto bloqueado correctamente'
+        ]);
+    }
+
+
+
+
+
+}
+
