@@ -27,3 +27,6 @@ Route::post('login', [AuthController::class, 'login']);
 // GET    /api/productos/{id}  (Llamará a InventarioController@show)
 // ... etc.
 Route::apiResource('productos', InventarioController::class);
+Route::get('sucursales-listado', [InventarioController::class, 'getSucursalesListado']);
+Route::get('almacenistas-listado', [InventarioController::class, 'getAlmacenistasListado']);
+Route::post('traspaso', [InventarioController::class, 'storeTraspaso']);
