@@ -1,0 +1,70 @@
+### Obtener proveedores
+GET http://localhost:8000/api/proveedores
+Accept: application/json
+
+
+### Registrar una compra (entrada)
+POST http://localhost:8000/api/compras
+Content-Type: application/json
+Accept: application/json
+
+{
+  "id_proveedor": 1,
+  "fecha_compra": "2025-12-03",
+  "numero_compra_factura": "FACT-001",
+  "detalles": [
+    {
+      "id_producto": 1,
+      "cantidad": 100,
+      "precio_unitario": 15.50
+    }
+  ]
+}
+
+GET http://localhost:8000/api/productos
+
+Accept: application/json
+
+GET http://localhost:8000/api/productos/1
+
+Accept: application/json
+
+POST http://localhost:8000/api/productos
+
+Content-Type: application/json
+Accept: application/json
+
+{
+  "nombre": "Nuevo Producto 355ml",
+  "stock": 50,
+  "fecha_ingreso": "2025-02-10",
+  "codigo_barra": "7501001230999",
+  "costo_inventario": 12.80,
+  "imagen_url": "img/producto_nuevo.png",
+  "descripcion": "Descripción del nuevo producto",
+  "precio_unitario": 23.00,
+  "estado": "activo",
+  "stock_minimo": 10,
+  "stock_actual": 50,
+  "stock_maximo": 200,
+  "presentacion": "355ml",
+  "tipo_envase": "lata",
+  "id_categoria": 1,
+  "id_marca": 1
+}
+
+POST http://localhost:8000/api/compras
+
+Content-Type: application/json
+{
+  "id_proveedor": 1,
+  "fecha_compra": "2025-02-01",
+  "numero_compra_factura": "FACT-123",
+  "detalles": [
+    {
+      "id_producto": 1,
+      "cantidad": 30,
+      "precio_unitario": 12.50
+    }
+  ]
+}
