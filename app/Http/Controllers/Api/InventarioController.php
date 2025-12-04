@@ -156,9 +156,6 @@ class InventarioController extends Controller
             return response()->json(['message' => 'Producto no encontrado'], 404);
         }
 
-        // Opcional: Validar si tiene stock antes de borrar
-        // Opcional: Borrar primero los registros de PRODUCTO_ALMACEN
-        // ProductoAlmacen::where('id_producto', $id)->delete();
 
         $producto->delete();
 
