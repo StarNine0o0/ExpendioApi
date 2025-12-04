@@ -37,8 +37,8 @@ Route::prefix('almacenistas')->group(function () {
 Route::apiResource('productos', InventarioController::class);
 
 // Si necesitas la ruta simple de ProductoController (solo lectura)
+Route::get('productos-activos', [ProductoController::class, 'index']);
 // descomenta esta línea:
-// Route::get('productos-activos', [ProductoController::class, 'index']);
 
 // =========================================================================
 // 4. COMPRAS
