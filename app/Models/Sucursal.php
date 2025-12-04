@@ -9,7 +9,7 @@ class Sucursal extends Model
 {
     use HasFactory;
 
-    protected $table = 'SUCURSALES';
+    protected $table = 'SUCURSALES';  // ← MAYÚSCULAS según tu DB
     protected $primaryKey = 'id_sucursal';
     public $timestamps = false;
 

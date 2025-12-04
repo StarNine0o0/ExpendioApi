@@ -9,7 +9,7 @@ class Producto extends Model
 {
     use HasFactory;
 
-    protected $table = 'PRODUCTO';
+    protected $table = 'PRODUCTO';  // ← MAYÚSCULAS según tu DB
     protected $primaryKey = 'id_producto';
     public $timestamps = false;
 
@@ -31,4 +31,24 @@ class Producto extends Model
         'id_categoria',
         'id_marca'
     ];
+
+    // Relaciones
+    
+    // Un producto pertenece a una categoría
+    public function categoria()
+    {
+        return $this->belongsTo(Categoria::class, 'id_categoria', 'id_categoria');
+    }
+
+    // Un producto pertenece a una marca
+    public function marca()
+    {
+        return $this->belongsTo(Marca::class, 'id_marca', 'id_marca');
+    }
+
+    // Un producto puede estar en varios almacenes
+    public function productoAlmacen()
+    {
+        return $this->hasMany(ProductoAlmacen::class, 'id_producto', 'id_producto');
+    }
 }

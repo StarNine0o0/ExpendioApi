@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Producto;       // Tu modelo principal
-use App\Models\ProductoAlmacen; // Para el stock
-use Illuminate\Support\Facades\DB; // Para transacciones (seguridad de datos)
+use App\Models\Producto;
+use App\Models\ProductoAlmacen;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class InventarioController extends Controller
@@ -37,19 +37,19 @@ class InventarioController extends Controller
         // 1. Validar los datos que entran
         $validated = $request->validate([
             // Datos de la tabla PRODUCTO
-            'nombre'           => 'required|string|max:50|unique:producto,nombre',
+            'nombre'           => 'required|string|max:50|unique:PRODUCTO,nombre',
             'codigo_barra'     => 'nullable|string|max:50',
             'costo_inventario' => 'required|numeric|min:0',
             'precio_unitario'  => 'required|numeric|min:0',
             'presentacion'     => ['required', Rule::in(['355ml', '473ml', '1l'])],
             'tipo_envase'      => ['required', Rule::in(['lata', 'botella', 'barril'])],
-            'id_categoria'     => 'required|integer|exists:categorias,id_categoria',
-            'id_marca'         => 'required|integer|exists:marcas,id_marca',
+            'id_categoria'     => 'required|integer|exists:CATEGORIAS,id_categoria',
+            'id_marca'         => 'required|integer|exists:MARCAS,id_marca',
             'descripcion'      => 'nullable|string|max:200',
             
             // Datos extra para la tabla PRODUCTO_ALMACEN (Stock Inicial)
             'stock_inicial'    => 'required|integer|min:0',
-            'id_sucursal'      => 'required|integer|exists:sucursales,id_sucursal',
+            'id_sucursal'      => 'required|integer|exists:SUCURSALES,id_sucursal',
             'ubicacion'        => 'nullable|string|max:50',
         ]);
 
@@ -75,7 +75,7 @@ class InventarioController extends Controller
 
             // B. Asignar el Stock en la Sucursal (Tabla PRODUCTO_ALMACEN)
             ProductoAlmacen::create([
-                'id_producto'  => $producto->id_producto, // Usamos el ID recién creado
+                'id_producto'  => $producto->id_producto,
                 'id_sucursal'  => $validated['id_sucursal'],
                 'stock_actual' => $validated['stock_inicial'],
                 'ubicacion'    => $validated['ubicacion'] ?? 'Bodega',
@@ -111,10 +111,16 @@ class InventarioController extends Controller
         $producto = Producto::with(['marca', 'categoria', 'productoAlmacen'])->find($id);
 
         if (!$producto) {
-            return response()->json(['message' => 'Producto no encontrado'], 404);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Producto no encontrado'
+            ], 404);
         }
 
-        return response()->json(['status' => 'success', 'data' => $producto]);
+        return response()->json([
+            'status' => 'success',
+            'data' => $producto
+        ]);
     }
 
     /**
@@ -126,13 +132,23 @@ class InventarioController extends Controller
         $producto = Producto::find($id);
 
         if (!$producto) {
-            return response()->json(['message' => 'Producto no encontrado'], 404);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Producto no encontrado'
+            ], 404);
         }
 
         $validated = $request->validate([
-            'nombre'           => ['sometimes', 'string', 'max:50', Rule::unique('producto', 'nombre')->ignore($id, 'id_producto')],
+            'nombre'           => ['sometimes', 'string', 'max:50', Rule::unique('PRODUCTO', 'nombre')->ignore($id, 'id_producto')],
+            'codigo_barra'     => 'sometimes|nullable|string|max:50',
+            'costo_inventario' => 'sometimes|numeric|min:0',
             'precio_unitario'  => 'sometimes|numeric|min:0',
-            // Agrega aquí los demás campos que quieras permitir editar...
+            'presentacion'     => ['sometimes', Rule::in(['355ml', '473ml', '1l'])],
+            'tipo_envase'      => ['sometimes', Rule::in(['lata', 'botella', 'barril'])],
+            'descripcion'      => 'sometimes|nullable|string|max:200',
+            'estado'           => ['sometimes', Rule::in(['activo', 'desactivado'])],
+            'stock_minimo'     => 'sometimes|integer|min:0',
+            'stock_maximo'     => 'sometimes|integer|min:0',
         ]);
 
         $producto->update($validated);
@@ -146,25 +162,46 @@ class InventarioController extends Controller
 
     /**
      * DELETE /api/productos/{id}
-     * Elimina un producto.
+     * Elimina un producto (soft delete recomendado).
      */
     public function destroy($id)
     {
         $producto = Producto::find($id);
 
         if (!$producto) {
-            return response()->json(['message' => 'Producto no encontrado'], 404);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Producto no encontrado'
+            ], 404);
         }
 
-        // Opcional: Validar si tiene stock antes de borrar
-        // Opcional: Borrar primero los registros de PRODUCTO_ALMACEN
-        // ProductoAlmacen::where('id_producto', $id)->delete();
+        // Opción 1: Borrado lógico (recomendado)
+        // Cambiar estado en vez de eliminar físicamente
+        $producto->estado = 'desactivado';
+        $producto->save();
 
+        // Opción 2: Borrado físico (usar con cuidado)
+        // Verificar si tiene stock antes de borrar
+        $tieneStock = ProductoAlmacen::where('id_producto', $id)
+                                     ->where('stock_actual', '>', 0)
+                                     ->exists();
+        
+        if ($tieneStock) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No se puede eliminar un producto con stock existente'
+            ], 400);
+        }
+
+        // Borrar registros relacionados primero
+        ProductoAlmacen::where('id_producto', $id)->delete();
+        
+        // Luego borrar el producto
         $producto->delete();
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Producto eliminado'
+            'message' => 'Producto eliminado correctamente'
         ]);
     }
 }
