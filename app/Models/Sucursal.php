@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Sucursal extends Model
 {
@@ -25,10 +26,22 @@ class Sucursal extends Model
         'encargado'
     ];
 
-    public function sucursal()
+    public function trabajadores()
     {
-        return $this->belongsTo(Sucursal::class, 'id_sucursal');
+        return $this->hasMany(Trabajador::class, 'id_sucursal', 'id_sucursal'); 
     }
+
+
+    public function productoAlmacen()
+    {
+        return $this->hasMany(ProductoAlmacen::class, 'id_sucursal', 'id_sucursal');
+    }
+
+
+        public function inventarios()
+        {
+            return $this->hasMany(ProductoAlmacen::class, 'id_sucursal', 'id_sucursal');
+        }
 
 
 }

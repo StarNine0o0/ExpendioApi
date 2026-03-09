@@ -13,7 +13,7 @@ class ProductoAlmacen extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'id_producto_sucursal',
+
         'id_producto',
         'id_sucursal',
         'stock_actual',
@@ -24,12 +24,12 @@ class ProductoAlmacen extends Model
     // Relación con el modelo Producto
     public function producto()
     {
-        return $this->belongsTo(Producto::class, 'id_producto');
+        return $this->belongsTo(Producto::class, 'id_producto', 'id_producto');
     }
 
     // Relación con el modelo Sucursal
     public function sucursal()
     {
-        return $this->belongsTo(Sucursal::class, 'id_sucursal');
+        return $this->belongsTo(Sucursal::class, 'id_sucursal', 'id_sucursal');
     }
 }

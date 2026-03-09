@@ -15,11 +15,10 @@ class Categoria extends Model
 
     protected $fillable = [
         'id_categoria',
-        'estado',
-        'tipo',
-        'codigo',
-        'imagen_producto',
-        'nombre'
+        'nombre_categoria',
+        'descripcion',
+        'imagen_url',
+        'estado'
     ];
 
     public function productos() //relacion con productos

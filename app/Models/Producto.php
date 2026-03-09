@@ -14,28 +14,26 @@ class Producto extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'nombre', 'stock', 'fecha_ingreso', 'codigo_barra', 
-        'costo_inventario', 'imagen_url', 'descripcion', 
-        'precio_unitario', 'estado', 'stock_minimo', 
-        'stock_actual', 'stock_maximo', 'presentacion', 
+        'nombre_producto', 'codigo_barras', 'precio_compra', 'precio_venta', 'fecha_ingreso', 
+        'imagen_url', 'descripcion', 'estado', 'stock_minimo', 'stock_maximo', 'presentacion',
         'tipo_envase', 'id_categoria', 'id_marca'
+        
+    ];
+
+    // para convertir los campos a tipos específicos
+    protected $casts = [
+        'fecha_ingreso' => 'date',
+        'precio_compra' => 'decimal:2',
+        'precio_venta' => 'decimal:2'
         
     ];
 
     // relaciones
 
-    public function categoria()
-    {
-        return $this->belongsTo(Categoria::class, 'id_categoria', 'id_categoria');
-    }
-
+    public function categoria() 
+    {return $this->belongsTo(Categoria::class, 'id_categoria', 'id_categoria'); }
     public function marca()
-    {
-        return $this->belongsTo(Marca::class, 'id_marca', 'id_marca');
-    }
-
-    public function productoAlmacen()
-    {
-        return $this->hasMany(ProductoAlmacen::class, 'id_producto', 'id_producto');
-    }
+    { return $this->belongsTo(Marca::class, 'id_marca', 'id_marca'); }
+    public function inventarios()
+    { return $this->hasMany(ProductoAlmacen::class, 'id_producto', 'id_producto');}
 }
